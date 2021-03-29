@@ -1107,7 +1107,7 @@ void updateCachedTime(int update_daylight_info) {
  * so in order to throttle execution of things we want to do less frequently
  * a macro is used: run_with_period(milliseconds) { .... }
  */
-
+// TODO serverCron是被谁调用的？
 int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     int j;
     UNUSED(eventLoop);
@@ -4218,7 +4218,7 @@ int redisIsSupervised(int mode) {
     return 0;
 }
 
-
+// 程序入口
 int main(int argc, char **argv) {
     struct timeval tv;
     int j;
@@ -4429,6 +4429,7 @@ int main(int argc, char **argv) {
 
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
+    // TODO
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

@@ -386,6 +386,7 @@ void flushAppendOnlyFile(int force) {
      * or alike */
 
     latencyStartMonitor(latency);
+    // write系统调用，将数据写进操作系统内核缓冲区
     nwritten = aofWrite(server.aof_fd,server.aof_buf,sdslen(server.aof_buf));
     latencyEndMonitor(latency);
     /* We want to capture different events for delayed writes:
@@ -482,14 +483,18 @@ void flushAppendOnlyFile(int force) {
     /* Re-use AOF buffer when it is small enough. The maximum comes from the
      * arena size of 4k minus some overhead (but is otherwise arbitrary). */
     if ((sdslen(server.aof_buf)+sdsavail(server.aof_buf)) < 4000) {
+        // 重用
         sdsclear(server.aof_buf);
     } else {
+        // 重建
         sdsfree(server.aof_buf);
         server.aof_buf = sdsempty();
     }
 
 try_fsync:
-    /* Don't fsync if no-appendfsync-on-rewrite is set to yes and there are
+    /* 如果no-appendfsync-on-rewrite设置为yes，当生成rdb或aof重写时，
+     * 即使appendfsync被设置为always或者everysec也不执行fsync操作
+     * Don't fsync if no-appendfsync-on-rewrite is set to yes and there are
      * children doing I/O in the background. */
     if (server.aof_no_fsync_on_rewrite &&
         (server.aof_child_pid != -1 || server.rdb_child_pid != -1))
@@ -500,6 +505,7 @@ try_fsync:
         /* redis_fsync is defined as fdatasync() for Linux in order to avoid
          * flushing metadata. */
         latencyStartMonitor(latency);
+        // 主线程刷盘
         redis_fsync(server.aof_fd); /* Let's try to get this data on the disk */
         latencyEndMonitor(latency);
         latencyAddSampleIfNeeded("aof-fsync-always",latency);
@@ -508,6 +514,7 @@ try_fsync:
     } else if ((server.aof_fsync == AOF_FSYNC_EVERYSEC &&
                 server.unixtime > server.aof_last_fsync)) {
         if (!sync_in_progress) {
+            // 子线程刷盘
             aof_background_fsync(server.aof_fd);
             server.aof_fsync_offset = server.aof_current_size;
         }
@@ -627,10 +634,12 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int a
         buf = catAppendOnlyGenericCommand(buf,argc,argv);
     }
 
-    /* Append to the AOF buffer. This will be flushed on disk just before
+    /*
+     * Append to the AOF buffer. This will be flushed on disk just before
      * of re-entering the event loop, so before the client will get a
      * positive reply about the operation performed. */
     if (server.aof_state == AOF_ON)
+        // AOF缓冲区底层是sds
         server.aof_buf = sdscatlen(server.aof_buf,buf,sdslen(buf));
 
     /* If a background append only file rewriting is in progress we want to
@@ -638,6 +647,7 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int a
      * in a buffer, so that when the child process will do its work we
      * can append the differences to the new append only file. */
     if (server.aof_child_pid != -1)
+        // TODO AOF重写缓冲区底层是啥
         aofRewriteBufferAppend((unsigned char*)buf,sdslen(buf));
 
     sdsfree(buf);
